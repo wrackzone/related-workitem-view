@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>related-workitem-view</title>
+
+    <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function () {
+                var app=null;Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",items:{html:'<a href="https://help.rallydev.com/apps/2.0rc2/doc/">App SDK 2.0rc2 Docs</a>'},_workItemType:"defect",_workItemColumns:["Name","Owner","State","Priority","PlanEstimate"],_workItemCustomField:"",launch:function(){app=this,app._createGrid()},_createGrid:function(scope){console.log("_createGrid");var filter=[];filter&&(app.showMask("Loading features..."),Ext.create("Rally.data.wsapi.TreeStoreBuilder").build({models:[this._workItemType],autoLoad:!0,enableHierarchy:!0,filters:[filter]}).then({success:app._onStoreBuilt,scope:app}))},_onStoreBuilt:function(store){console.log("_onStoreBuilt"),this.grid&&this.remove(this.grid),this.grid=Ext.create("Rally.ui.grid.TreeGrid",{xtype:"rallytreegrid",store:store,context:app.getContext(),enableEditing:!1,enableBulkEdit:!1,shouldShowRowActionsColumn:!1,enableRanking:!1,columnCfgs:app._workItemColumns}),this.add(this.grid)},showMask:function(msg){this.getEl()&&(this.getEl().unmask(),this.getEl().mask(msg))},hideMask:function(){this.getEl().unmask()}});
+
+            Rally.launchApp('CustomApp', {
+                name:"related-workitem-view",
+	            parentRepos:""
+            });
+
+        });
+    </script>
+
+
+    <style type="text/css">
+        .app {
+     /* Add app styles here */
+}
+
+    </style>
+</head>
+<body></body>
+</html>
