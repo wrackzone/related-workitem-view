@@ -12,15 +12,34 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-    items:{ html:'<a href="https://help.rallydev.com/apps/2.0rc2/doc/">App SDK 2.0rc2 Docs</a>'},
+    // items:{ html:'<a href="https://help.rallydev.com/apps/2.0rc2/doc/">App SDK 2.0rc2 Docs</a>'},
     
     _workItemType : 'defect',
     _workItemColumns : ['Name','Owner','State','Priority','PlanEstimate'],
-    _workItemCustomField : "",
+    // _workItemCustomField : "c_WorkItemID",
+
+    config: {
+        defaultSettings: {
+            WorkItemCustomField: "c_WorkItemID"
+        }
+    },
+
+    getSettingsFields: function() {
+        return [
+            {
+                name: 'WorkItemCustomField',
+                fieldLabel : "The custom field name that contains referenced work item",
+                xtype: 'rallytextfield',
+                width : 400
+            },
+        ];
+    },
+
 
     launch: function() {
         //Write app code here
         app = this;
+        app._workItemCustomField = this.getSetting("WorkItemCustomField");
         app._createGrid();
     },
 
@@ -31,7 +50,7 @@ Ext.define('CustomApp', {
         var filter = []; // app._createReleaseFilter(scope);
 
         if (filter) {
-            app.showMask("Loading features...");
+            // app.showMask("Loading features...");
             Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
                 // models: ['portfolioitem/feature'],
                 models: [this._workItemType],
@@ -50,6 +69,37 @@ Ext.define('CustomApp', {
         if (this.grid) {
             this.remove(this.grid);
         }
+        app._workItemColumns.push({
+        	dataIndex : app._workItemCustomField,
+        	hidden:true
+        })
+        app._workItemColumns.push(
+        	{ 
+        		header : 'Work Item ID',   
+            	dataIndex : 'State', 
+            	width : 70,
+            	hidden : false,
+    	        renderer : app.renderCustomColumn
+            }
+        );
+        app._workItemColumns.push(
+        	{ 
+        		header : 'Work Item Name',   
+            	dataIndex : 'State', 
+            	width : 150,
+            	hidden : false,
+    	        renderer : app.renderWorkItemName
+            }
+        );
+        app._workItemColumns.push(
+        	{ 
+        		header : 'Work Item State',   
+            	dataIndex : 'State', 
+            	width : 150,
+            	hidden : false,
+    	        renderer : app.renderWorkItemState
+            }
+        );
 
         this.grid = Ext.create('Rally.ui.grid.TreeGrid', {
 	        xtype: 'rallytreegrid',
@@ -63,6 +113,76 @@ Ext.define('CustomApp', {
 	    });
         this.add(this.grid);
     },
+
+    renderCustomColumn : function(value,meta,r) {
+      	var cWorkItemID = null;
+      	// if (r.get("_type")=="portfolioitem/feature") {
+        if (r.get("_WorkItem")) {
+        	return r.get("_WorkItem").get("FormattedID");
+        } else {
+        	cWorkItemID = r.get(app._workItemCustomField);
+        	if (cWorkItemID && cWorkItemID != "") {
+	  			var itemId = Ext.id();
+		        Ext.defer(app.readWorkItem,500, app, [value,itemId,r,cWorkItemID]);
+		    }
+	        return('');
+        }
+	},
+
+	renderWorkItemName : function(value,meta,r) {
+		if (r.get("_WorkItem")) {
+        	return r.get("_WorkItem").get("Name");
+        } else {
+	        return('');
+        }
+	},
+
+	renderWorkItemState : function(value,meta,r) {
+		var wi = r.get("_WorkItem");
+		if (wi) {
+			if (app.getModelType(wi.get("FormattedID"))=="PortfolioItem/Feature") {
+				console.log(wi);
+				return Math.round(Number(wi.get("PercentDoneByStoryCount"))*100) + "%"
+			} else {
+				return wi.get("ScheduleState")
+			}
+        } 
+        return('');
+	},
+
+	getModelType : function(id) {
+		var regex = /([A-Z]{1,2})(\d+)/ig;
+
+		var prefix = (regex.exec(id))[1];
+		console.log("prefix",prefix);
+
+		if (prefix.toLowerCase()=="f") {
+			return "PortfolioItem/Feature";
+		} 
+		if (prefix.toLowerCase()=="us") {
+			return "HierarchicalRequirement";
+		} 
+
+		return "";
+
+	},
+
+	readWorkItem: function(value,itemId,rec,cWorkItemID) {
+
+		app._loadAStoreWithAPromise(
+			app.getModelType(cWorkItemID),
+			["FormattedID","Name","ScheduleState","PercentDoneByStoryCount"],
+			{property:"FormattedID",operator:"=",value:cWorkItemID}
+		).then({
+			success : function(records) {
+				if (records && records.length>0) {
+					rec.set("_WorkItem",_.first(records))
+				}
+			}
+		})
+
+	},
+
     showMask: function(msg) {
         if ( this.getEl() ) { 
             this.getEl().unmask();
@@ -71,9 +191,36 @@ Ext.define('CustomApp', {
     },
     hideMask: function() {
         this.getEl().unmask();
+    },
+
+    _loadAStoreWithAPromise: function(model_name, model_fields, filters,ctx,order){
+            var deferred = Ext.create('Deft.Deferred');
+            var me = this;
+              
+            var config = {
+                model: model_name,
+                fetch: model_fields,
+                filters: filters,
+                limit: 'Infinity'
+            };
+            if (!_.isUndefined(ctx)&&!_.isNull(ctx)) {
+                config.context = ctx;
+            }
+            if (!_.isUndefined(order)&&!_.isNull(order)) {
+                config.order = order;
+            }
+
+            Ext.create('Rally.data.wsapi.Store', config ).load({
+                callback : function(records, operation, successful) {
+                    if (successful){
+                        deferred.resolve(records);
+                    } else {
+                        deferred.reject('Problem loading: ' + operation.error.errors.join('. '));
+                    }
+                }
+            });
+            return deferred.promise;
     }
-
-
 });
 
 
